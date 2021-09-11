@@ -8,15 +8,14 @@
 // @license MIT
 // ==/UserScript==
 
-/*jshint esversion: 6 */
 
 
-
-
+var domain = "flambystats"
 var tokenResult = '';
 var tokenLeague = '';
 var oldHref = document.location.href;
 var dataLength= 0;
+var geoguessrData = [];
 
 
 
@@ -47,7 +46,7 @@ window.onload = (event) => {
 
 
 
-function downloadHistory(){
+async function downloadHistory(){
 if (!location.pathname.startsWith("/me/activities") || location.pathname.endsWith("#")) {
     return false;
   }
@@ -64,27 +63,32 @@ if (!location.pathname.startsWith("/me/activities") || location.pathname.endsWit
   button_element.onclick = function () {
       var myActivities;
 
-      var geoguessrData = [];
-
       var activitiesRequest = new XMLHttpRequest();
-      activitiesRequest.open("GET", 'https://www.geoguessr.com/api/v3/social/feed/me?count=50&page=0', false); //TODO ici
+      activitiesRequest.open("GET", 'https://www.geoguessr.com/api/v3/social/feed/me?count=5&page=0', false); //TODO ici
       activitiesRequest.send();
 
 
          if (activitiesRequest.status === 200) {
          myActivities = JSON.parse(activitiesRequest.responseText);
-
-              for (let obj in myActivities){
-                  if (myActivities[obj].activityType === 8){
-                      var challengeToken = myActivities[obj].payload.challenge.token;
-                      var challengeDate = new Date(myActivities[obj].dateTime);
-                      
-                      geoguessrData = addResult(geoguessrData,challengeToken,challengeDate);
+              //console.log(myActivities);
+              for (var i = 0; i < myActivities.length; i++){
+                  if (myActivities[i].activityType === 8){
+                      var challengeToken = myActivities[i].payload.challenge.token;
+                      var challengeDate = new Date(myActivities[i].dateTime);
+                      setTimeout(addResult,250*i,challengeToken,challengeDate);
                   }
               }
          }
 
-           publishResult(geoguessrData);
+      const sleep = async () => {
+    await new Promise((resolve)=>setTimeout(() => {
+        console.log("timeout");
+        publishResult(geoguessrData);
+        resolve();
+    }, 250*(myActivities.length+1)));
+}
+
+      
 
   }
 
@@ -92,14 +96,16 @@ if (!location.pathname.startsWith("/me/activities") || location.pathname.endsWit
 }
 
 
-
+function timeout(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 
 function showStats(){
 
    var ifrm = document.createElement("iframe");
     var nickname = getNickname();
-    var ifrmTarget = "https://flambystats.glitch.me/?id=" + nickname;
+    var ifrmTarget = "https://" + domain + ".glitch.me/?id=" + nickname;
         ifrm.setAttribute("src", ifrmTarget);
     ifrm.setAttribute("id", "istats");
         ifrm.style.width = "1000px";
@@ -125,7 +131,7 @@ function publishResult(data){
 
 
 
-     var url = 'https://flambystats.glitch.me/api';
+     var url = "https://"+ domain +".glitch.me/api";
 
   const options = {
     method: 'POST',
@@ -216,19 +222,20 @@ return Nick;
 
 
 
-function addResult(geoguessrData,tokenR,date){
+async function addResult(tokenR,date){
 
-            var isEnd = false;
-            var iter = 0;
-            var solutionData;
+    var isEnd = false;
+    var iter = 0;
+    var solutionData;
 
+    const options = { method: 'GET' };
 
-            var solutionRequest = new XMLHttpRequest();
-            solutionRequest.open("GET", 'https://www.geoguessr.com/api/v3/challenges/' + tokenR + '/game', false); // https://www.geoguessr.com/api/v3/challenges/b5mK4LaRQO98ZPR3/game
-            solutionRequest.send();
-            if (solutionRequest.status === 200) {
-                solutionData = JSON.parse(solutionRequest.responseText);
-                geoguessrData = writeGGData(geoguessrData, solutionData, date);
+    var url = 'https://www.geoguessr.com/api/v3/challenges/' + tokenR + '/game';
+    console.log(url);
+      var response = await fetch(url, options);
+    console.log(response.status);
+      const dataReturned = await response.json();
+                writeGGData(dataReturned, date);
 
              /*   while (!isEnd) {
 
@@ -250,12 +257,11 @@ function addResult(geoguessrData,tokenR,date){
             iter = iter + 50;
             
            }*/ //download full reults
-                };
-    return geoguessrData;
+             
 }
 
 
-function writeGGData(geoguessrData, game, dateLeg) {
+function writeGGData(game, dateLeg) {
 
     var guesses = game.player.guesses;
     var strGameType = "";
@@ -301,6 +307,4 @@ function writeGGData(geoguessrData, game, dateLeg) {
 
         geoguessrData.push(row);
           };
-
-  return geoguessrData;
 }
